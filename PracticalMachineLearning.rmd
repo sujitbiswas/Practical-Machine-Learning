@@ -1,0 +1,106 @@
+---
+title: "Practical Machine Learning Assignment"
+date: "Thursday, November 22, 2014"
+output: html_document
+---
+
+
+
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The task is to build a model which will correctly classify activities, given unlabelled sets of readings.
+
+Load the [Caret](http://caret.r-forge.r-project.org/) library and set the random number generator's seed, to ensure reproducibility:
+
+```{r setup, message=FALSE}
+library(caret)
+set.seed(123)
+```
+
+## Read and Clean the Data
+Read the data, clean "NA" and empty fields; trim whitespace in other fields so R treats them correctly as numeric.
+
+```{r read}
+rawData <- read.csv("pml-training.csv", na.strings=c("NA",""), strip.white=T)
+dim(rawData)
+```
+
+## Compute the feature set
+
+Ignore all columns with NA, also first 7 columns of the data set which is related to metadata & time, Once we compute the feature set, the training data set is ready to compute a prdictive model
+
+
+```{r clean}
+feature_set <- colnames(rawData[colSums(is.na(rawData)) == 0])[-(1:7)]
+pepared_data <- rawData[,feature_set]
+
+feature_set
+
+```
+
+partition the data into training and test sets. The *classe* column is the outcome 
+
+```{r partition}
+inTrain <- createDataPartition(pepared_data$classe, p=0.75, list=F)
+training <- pepared_data[inTrain,]
+testing <- pepared_data[-inTrain,]
+```
+
+## Random Forest Model with crossvalidation
+
+create [Random Forest](https://en.wikipedia.org/wiki/Random_forest) model on the training set. to control the nuances of training use "trainControl" The sampling method used is crossvalidation "cv", the number of resampling interation is set at 5. Once the model is created use the same against the test set. please note creation of model may take few minutes.
+
+```{r train, cache=TRUE, message=FALSE}
+ctrl <- trainControl(allowParallel=TRUE, method="cv", number=5)
+model <- train(classe ~ ., data=training, model="rf", trControl=ctrl)
+pred <- predict(model, newdata=testing)
+```
+
+
+## model accurary & confusion matrix
+run the predictive model on test set and create the confusion matrix. The accuracy of the model is 99.25%
+
+```{r predict-test}
+sum(pred == testing$classe) / length(pred)
+confusionMatrix(testing$classe, pred)$table
+```
+
+based on the results above we have a very accurate model, now let us prepare the evaluation data set.
+
+```{r predict-unknown}
+rawEvaluation_data <- read.csv("pml-testing.csv", na.strings=c("NA",""), strip.white=T)
+evaluation_data <- rawEvaluation_data[,feature_set[1:52]]
+answers <- predict(model, newdata=evaluation_data)
+answers
+```
+
+check most important in this model
+
+```{r variables}
+varImp(model)
+```
+
+## Conclusion and answers
+
+As can be seen from the confusion matrix this model is very accurate. 
+Prepare the submission. (using COURSERA provided code)
+
+```{r answers}
+
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+
+
+```
+
+
